@@ -1,0 +1,105 @@
+---
+- name: DEPLOY REDASH COPY INTO NEW NODE
+  hosts: test5
+  become: true
+
+  pre_tasks:
+   
+   - name: CHECK DOCKER INSTALLED
+     shell: find_dkr=$(docker --version 2>/dev/null); if [ -n "$find_dkr" ]; then echo "is"; else echo "not"; fi; 
+     register: is_dkr
+
+   - name: CHECK DOCKER-COMPOSE INSTALLED
+     shell: find_dkrc=$(docker-compose --version 2>/dev/null); if [ -n "$find_dkrc" ]; then echo "is"; else echo "not"; fi;
+     register: is_dkrc
+
+     
+  tasks:
+
+   - block:
+      - name: INSTALL yum-utils
+        yum: 
+         name: "{{ item }}" 
+         state: present
+         update_cache: yes
+        with_items:
+         - yum-utils
+         - device-mapper-persistent-data 
+         - lvm2
+
+      - name: Add Docker repo
+        get_url:
+          url: https://download.docker.com/linux/centos/docker-ce.repo
+          dest: /etc/yum.repos.d/docer-ce.repo
+
+      - name: INSTALL DOCKER
+        dnf:
+         name: "{{ item }}"
+         state: latest
+        with_items:
+          - containerd.io
+          - docker-ce
+          - docker-ce-cli
+
+      - name: START DOCKER
+        service: name=docker state=started enabled=yes
+     when: is_dkr.stdout == "not"
+
+   - block:
+     - name: INSTALL DOCKER-COMPOSE
+       shell: "{{ item }}"
+       with_items: 
+         - curl -L "https://github.com/docker/compose/releases/download/1.27.4/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+         - chmod +x /usr/local/bin/docker-compose
+         - ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+     when: is_dkrc.stdout == "not"
+      
+   - name: MAKE WORKDIR
+     file:
+       path: /data/redash/current
+       state: directory
+       mode: 0775
+       recurse: yes
+ 
+   - name: MAKE DB DIRS
+     file:
+       path: "{{ item }}"
+       state: directory
+       mode: 0775
+     with_items:
+       - /data/redash/current/postgres_data
+       - /data/redash/current/redis_data
+
+   - name: COPY env.j2
+     template: src=./env.j2 dest=/data/redash/current/env mode=0775
+
+   - name: COPY docker-compose.yml
+     copy: src=./docker-compose.yml dest=/data/redash/current mode=0775
+
+   - name: START docker-compose
+     shell: cd /data/redash/current && docker-compose -p redash up -d
+
+   - name: DUMP & RESTORE actual database
+     shell: cd /data/redash/current && docker-compose -p redash exec -d postgres bash -c 'PGPASSWORD=dumper /usr/local/bin/pg_dump -c -Fc -h 10.10.108.35 -p 5432 -U dumper -d postgres > /tmp/postgres.dmp'
+
+   - pause:
+       minutes: 20
+
+   - name: RESTORE actual database
+     shell: cd /data/redash/current && docker-compose -p redash exec -d postgres bash -c '/usr/local/bin/pg_restore -U postgres -d postgres < /tmp/postgres.dmp 2>/dev/null'
+
+   - name: MODIFY postygresql.conf
+     shell: "{{ item }}"
+     with_items:
+        - echo 'shared_buffers = 512MB' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'work_mem = 64MB' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'maintenance_work_mem = 128MB' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'autovacuum_vacuum_scale_factor = 0.02' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'autovacuum_analyze_scale_factor = 0.01' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'autovacuum_vacuum_cost_delay = 5ms' >> /data/redash/current/postgres_data/postgresql.conf
+   
+   - pause:
+       minutes: 30
+
+   - name: RESTART docker-compose
+     shell: cd /data/redash/current && docker-compose -p redash stop && docker-compose -p redash start
