@@ -79,14 +79,18 @@
    - name: START docker-compose
      shell: cd /data/redash/current && docker-compose -p redash up -d
 
-   - name: DUMP & RESTORE actual database
-     shell: cd /data/redash/current && docker-compose -p redash exec -d postgres bash -c 'PGPASSWORD=dumper /usr/local/bin/pg_dump -c -Fc -h 10.10.108.35 -p 5432 -U dumper -d postgres > /tmp/postgres.dmp'
+   - name: DUMP actual database
+     shell: cd /data/redash/current && docker-compose -p redash exec postgres bash -c 'PGPASSWORD=dumper /usr/local/bin/pg_dump -c -Fc -h 10.10.108.35 -p 5432 -U dumper -d postgres > /tmp/postgres.dmp'
 
    - pause:
-       minutes: 20
+       minutes: 1
 
    - name: RESTORE actual database
-     shell: cd /data/redash/current && docker-compose -p redash exec -d postgres bash -c '/usr/local/bin/pg_restore -U postgres -d postgres < /tmp/postgres.dmp 2>/dev/null'
+     shell: cd /data/redash/current && docker-compose -p redash exec postgres bash -c '/usr/local/bin/pg_restore -U postgres -d postgres < /tmp/postgres.dmp 2>/dev/null'
+     ignore_errors: yes
+
+   - pause:
+       minutes: 1
 
    - name: MODIFY postygresql.conf
      shell: "{{ item }}"
@@ -94,12 +98,18 @@
         - echo 'shared_buffers = 512MB' >> /data/redash/current/postgres_data/postgresql.conf
         - echo 'work_mem = 64MB' >> /data/redash/current/postgres_data/postgresql.conf
         - echo 'maintenance_work_mem = 128MB' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'bgwriter_delay = 100ms' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'bgwriter_lru_maxpages = 1000' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'bgwriter_lru_multiplier = 5.0' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'checkpoint_timeout = 30min' >> /data/redash/current/postgres_data/postgresql.conf
         - echo 'autovacuum_vacuum_scale_factor = 0.02' >> /data/redash/current/postgres_data/postgresql.conf
         - echo 'autovacuum_analyze_scale_factor = 0.01' >> /data/redash/current/postgres_data/postgresql.conf
         - echo 'autovacuum_vacuum_cost_delay = 5ms' >> /data/redash/current/postgres_data/postgresql.conf
    
-   - pause:
-       minutes: 30
-
+   - name: DELETE /tmp/postgres.dmp
+     file:
+       path: /tmp/postgres.dmp
+       state: absent
+    
    - name: RESTART docker-compose
      shell: cd /data/redash/current && docker-compose -p redash stop && docker-compose -p redash start
