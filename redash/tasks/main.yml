@@ -44,11 +44,11 @@
      when: is_dkrc.stdout == "not"
 
    - name: MAKE WORKDIR
-      file:
-        path: /data/redash/current
-        state: directory
-        mode: 0775
-        recurse: yes
+     file:
+       path: /data/redash/current
+       state: directory
+       mode: 0775
+       recurse: yes
 
    - name: MAKE DB DIRS
      file:
@@ -104,9 +104,7 @@
         - echo 'autovacuum_vacuum_cost_delay = 5ms' >> /data/redash/current/postgres_data/postgresql.conf
 
    - name: DELETE /tmp/postgres.dmp
-     file:
-       path: /tmp/postgres.dmp
-       state: absent
+     shell: cd /data/redash/current && docker-compose -p redash exec postgres bash -c 'rm -rf /tmp/postgres.dmp'
      tags: update_db
 
    - name: RESTART docker-compose

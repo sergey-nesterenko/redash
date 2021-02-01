@@ -1,6 +1,6 @@
 ---
 - name: DEPLOY REDASH COPY INTO NEW NODE
-  hosts: test5
+  hosts: redash
   become: true
 
   roles:
