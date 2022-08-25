@@ -1,2 +1,5 @@
 [redash]
-redash1 ansible_host=10.10.136.11 hostname=vml-m9-dev-pg-3 ansible_user=snesterenko ansible_ssh_private_key_file=~/.ssh/id_rsa
+redash1 ansible_host=10.10.108.35 ansible_user=snesterenko ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+[redash_dev]
+redash_dev1 ansible_host=10.65.8.33 ansible_user=snesterenko ansible_ssh_private_key_file=~/ssh_old/id_rsa

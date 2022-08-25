@@ -1,0 +1,39 @@
+---
+# tasks file for restore redash from PROD
+
+   - name: DUMP actual database
+     shell: cd /data/redash/current && /usr/local/bin/docker-compose -p redash exec postgres bash -c 'PGPASSWORD={{ redash_pg_password }} /usr/local/bin/pg_dump -c -Fc -h {{ redash_pg_host }} -p 5432 -U {{ redash_pg_user }} -d {{ redash_pg_db }} --exclude-table-data=query_results > /tmp/postgres.dmp'
+     tags: update_db
+
+   - pause:
+       minutes: 1
+     tags: update_db
+
+   - name: RESTART docker-compose
+     shell: cd /data/redash/current && /usr/local/bin/docker-compose -p redash restart
+     tags: update_db
+
+   - name: RESTORE actual database
+     shell: cd /data/redash/current && /usr/local/bin/docker-compose -p redash exec postgres bash -c '/usr/local/bin/pg_restore -c --if-exists -U postgres -d postgres < /tmp/postgres.dmp'
+     ignore_errors: yes
+     tags: update_db
+
+   - pause:
+       minutes: 1
+     tags: update_db
+
+   - name: DELETE /tmp/postgres.dmp
+     shell: cd /data/redash/current && docker-compose -p redash exec postgres bash -c 'rm -f /tmp/postgres.dmp'
+     tags: update_db
+
+   - pause:
+       seconds: 15
+     tags: update_db
+
+   - name: RESTART docker-compose
+     shell: cd /data/redash/current && /usr/local/bin/docker-compose -p redash down
+     tags: update_db
+
+   - name: RESTART docker-compose
+     shell: cd /data/redash/current && /usr/local/bin/docker-compose -p redash up -d
+     tags: update_db

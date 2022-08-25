@@ -1,0 +1,94 @@
+---
+# tasks file for redash deploy WITH NEEDS CPUs 8  RAM 16 GB
+   - name: INSTALL yum-utils
+     yum:
+       name: "{{ item }}"
+       state: present
+       update_cache: yes
+     with_items:
+       - yum-utils
+       - device-mapper-persistent-data
+       - lvm2
+       - curl
+
+   - name: Add Docker repo
+     get_url:
+       url: https://download.docker.com/linux/centos/docker-ce.repo
+       dest: /etc/yum.repos.d/docker-ce.repo
+
+   - name: INSTALL DOCKER
+     dnf:
+      name: "{{ item }}"
+      state: present
+     with_items:
+      - containerd.io
+      - docker-ce
+      - docker-ce-cli
+
+   - name: INSTALL DOCKER-COMPOSE
+     shell: "{{ item }}"
+     with_items:
+       - curl -L "https://github.com/docker/compose/releases/download/{{ dc_v }}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+       - chmod +x /usr/local/bin/docker-compose
+       - rm -f /bin/docker-compose
+       - ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+
+   - name: MAKE WORKDIR
+     file:
+       path: /data/redash/current
+       state: directory
+       mode: 0775
+       recurse: yes
+
+   - name: MAKE DB DIRS
+     file:
+       path: "{{ item }}"
+       state: directory
+       mode: 0775
+     with_items:
+       - /data/redash/current/postgres_data
+       - /data/redash/current/redis_data
+
+   - name: COPY env.j2
+     template: src=env.j2 dest=/data/redash/current/env mode=0775
+
+   - name: COPY docker-compose.yml
+     copy: src=docker-compose.yml dest=/data/redash/current mode=0775
+
+   - name: MAKE DOCKER START
+     service: name=docker state=started enabled=yes
+
+   - name: UP docker-compose
+     shell: cd /data/redash/current && docker-compose -p redash up -d --force-recreate --build
+
+   - name: DOWN docker-compose for db creation
+     shell: cd /data/redash/current && docker-compose -p redash down
+
+   - name: MODIFY postgresql.conf FOR DB performance
+     shell: "{{ item }}"
+     with_items:
+        - echo 'shared_buffers = 4GB' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'work_mem = 128MB' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'maintenance_work_mem = 256MB' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'bgwriter_delay = 100ms' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'bgwriter_lru_maxpages = 1000' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'bgwriter_lru_multiplier = 5.0' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'checkpoint_timeout = 60min' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'checkpoint_completion_target = 0.9' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'autovacuum_vacuum_scale_factor = 0.02' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'autovacuum_analyze_scale_factor = 0.01' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'autovacuum_vacuum_cost_delay = 5ms' >> /data/redash/current/postgres_data/postgresql.conf
+        - echo 'autovacuum_max_workers = 8' >> /data/redash/current/postgres_data/postgresql.conf
+
+   - name: DB SCHEMA CREATE
+     shell: cd /data/redash/current && /usr/local/bin/docker-compose run --rm server create_db
+
+   - pause:
+       seconds: 15
+
+   - name: DROP containers FOR DB SCHEMA CREATION
+     shell: cd /data/redash/current && /usr/local/bin/docker-compose down
+  
+   - name: UP docker-compose
+     shell: cd /data/redash/current && /usr/local/bin/docker-compose -p redash up -d
+

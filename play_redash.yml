@@ -1,7 +1,8 @@
 ---
 - name: DEPLOY REDASH COPY INTO NEW NODE
-  hosts: redash
+  hosts: redash_dev
   become: true
 
   roles:
-   - redash
+   #- redash
+   - redash_db_update

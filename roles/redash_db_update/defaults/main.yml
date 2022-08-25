@@ -1,0 +1,6 @@
+---
+# defaults file for redash
+    redash_pg_host: 10.10.108.35
+    redash_pg_user: dumper
+    redash_pg_password: dumper
+    redash_pg_db: postgres
