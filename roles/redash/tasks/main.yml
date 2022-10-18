@@ -49,6 +49,9 @@
        - /data/redash/current/postgres_data
        - /data/redash/current/redis_data
 
+   - name: COPY redash.service to systemd
+     copy: src=redash.service dest=/usr/lib/systemd/system/redash.service mode=0664
+
    - name: COPY env.j2
      template: src=env.j2 dest=/data/redash/current/env mode=0775
 
@@ -89,6 +92,12 @@
    - name: DROP containers FOR DB SCHEMA CREATION
      shell: cd /data/redash/current && /usr/local/bin/docker-compose down
   
-   - name: UP docker-compose
-     shell: cd /data/redash/current && /usr/local/bin/docker-compose -p redash up -d
+   #- name: UP docker-compose
+   #  shell: cd /data/redash/current && /usr/local/bin/docker-compose -p redash up -d
+
+   - name: reload systemd
+     systemd: daemon_reload=yes
+
+   - name: start Redash with redash.service
+     service: name=redash state=started enabled=yes
 

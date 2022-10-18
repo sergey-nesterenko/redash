@@ -1,0 +1,14 @@
+[Unit]
+Description=redash in a container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/data/redash/current
+ExecStart=/usr/bin/docker-compose -p redash -f /data/redash/current/docker-compose.yml up -d
+ExecStop=/usr/bin/docker-compose -p redash -f /data/redash/current/docker-compose.yml down
+
+[Install]
+WantedBy=multi-user.target

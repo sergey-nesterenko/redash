@@ -3,6 +3,9 @@
   hosts: redash_dev
   become: true
 
+  vars:
+    #- database_connect: postgresql://postgres@postgres/postgres
+    - database_connect: postgresql://postgres:123456@10.65.8.30:31816/redash
   roles:
-   #- redash
-   - redash_db_update
+   - redash
+   #- redash_db_update
